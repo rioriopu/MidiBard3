@@ -12,7 +12,7 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L3L6CQMMD)
 
-`MidiBard 2` is an FF14 Bard plugin that is built on the [Dalamud](https://github.com/goatcorp/Dalamud) framework. `MidiBard 2` enables bard performance using MIDI files or keyboards, and features zero input latency and perfect sync between bards. The original author of this plugin is [akira0245](https://github.com/akira0245/MidiBard) and it is currently being developed by [Ori](https://github.com/reckhou/MidiBard2).
+`MidiBard 2` is an FF14 Bard plugin that is built on the [Dalamud](https://github.com/goatcorp/Dalamud) framework. `MidiBard 2` enables bard performance using MIDI files or keyboards, and features zero input latency and perfect sync between bards. The original author of this plugin is [akira0245](https://github.com/akira0245/MidiBard), [Ori](https://github.com/reckhou/MidiBard2) and it is currently being developed by [Estell](https://github.com/reckhou/MidiBard2).
 
 For more detailed information, please refer to the  [MidiBard Manuals](https://github.com/reckhou/MidiBard2/tree/v2-api7-stable/Manual).
 
