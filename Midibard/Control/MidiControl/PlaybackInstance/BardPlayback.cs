@@ -67,7 +67,9 @@ internal sealed class BardPlayback : Playback
     {
         // dont use midiFileConfi or Default Performer when not in a party
         var ignoreDefaultPerformer = api.PartyList.IsInParty() && MidiBard.config.lockTracks;
-        if (!api.PartyList.IsInParty() || ignoreDefaultPerformer)
+        // アライアンス or クロスワールド構成の場合はパーティ人数が0でも設定を使用する。
+        var inEnsemble = api.PartyList.IsInAllianceOrParty() || Managers.EnsembleMembers.IsAllianceOrCrossWorld();
+        if ((!inEnsemble) || ignoreDefaultPerformer)
         {
             PluginLog.Debug($"[LoadPlayback] using config TrackStatus");
             return null;

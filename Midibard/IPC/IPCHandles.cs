@@ -180,6 +180,11 @@ static class IPCHandles
     private static void HandleUpdateMidiFileConfig(IPCEnvelope message)
     {
         var midiFileConfig = message.StringData[0].JsonDeserialize<MidiFileConfig>();
+        if (MidiBard.CurrentPlayback == null)
+        {
+            PluginLog.Warning("[HandleUpdateMidiFileConfig] CurrentPlayback is null, config update skipped.");
+            return;
+        }
         MidiBard.CurrentPlayback.MidiFileConfig = midiFileConfig;
         MidiBard.CurrentPlayback.SyncTrackStatusWithMidiFileConfig();
     }
