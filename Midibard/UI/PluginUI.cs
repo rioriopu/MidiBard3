@@ -139,17 +139,15 @@ public partial class PluginUI
                 ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, ImGuiHelpers.ScaledVector2(4, 4));
                 ImGuiUtil.PushIconButtonSize(ImGuiHelpers.ScaledVector2(45.5f, 25));
                 {
+                    DrawButtonLoadAndPrepareEnsemble();
                     DrawButtonPlayPause(disabled: ensembleRunning);
                     DrawButtonStop();
-                    DrawButtonFastForward(disabled: ensembleRunning);
                     DrawButtonPlayMode(disabled: ensembleRunning);
                     DrawButtonShowSettingsWindow();
                     DrawButtonVisualization();
-                    DrawButtonShowEnsembleWindow(disabled: !api.PartyList.IsPartyLeader());
-                    if (!api.PartyList.IsPartyLeader())
-                    {
+                    DrawButtonShowEnsembleWindow(disabled: !global::MidiBard.Managers.EnsembleMembers.CanConduct());
+                    if (!global::MidiBard.Managers.EnsembleMembers.CanConduct())
                         ShowEnsembleWindow = false;
-                    }
                 }
                 ImGuiUtil.PopIconButtonSize();
                 ImGui.PopStyleVar();

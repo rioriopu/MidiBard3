@@ -83,6 +83,31 @@ internal class EnsembleManager : IDisposable
         Playlib.SendAction("SelectYesno", 3, 0);
     }
 
+    // アライアンス用: ゲームの合奏レディチェックを使わずに、ローカル再生で合奏を開始する。
+    // FF14 のレディチェックは同一ワールドのパーティ限定でアライアンスでは弾かれるため、
+    // 各クライアントがアライアンスチャットの合図で「停止→先頭→再生」する (担当トラックの
+    // フィルタは曲ロード時の割当に既に含まれているので、各自の担当だけが鳴る)。同期はチャット
+    // 受信のタイミング (サーバー配信なので各クライアントほぼ同時) に依存し、レディチェックより緩い。
+    internal static void StartEnsembleWithoutReadyCheck()
+    {
+        if (MidiBard.CurrentPlayback == null)
+        {
+            ImGuiUtil.AddNotification(NotificationType.Error, "Please load a song before starting ensemble!");
+            return;
+        }
+
+        try
+        {
+            MidiBard.CurrentPlayback.Stop();
+            MidiBard.CurrentPlayback.MoveToStart();
+            MidiPlayerControl.DoPlay(true);
+        }
+        catch (Exception e)
+        {
+            PluginLog.Error(e, "error StartEnsembleWithoutReadyCheck");
+        }
+    }
+
     //private unsafe IntPtr HandleUpdateMetronome(IntPtr agentMetronome, byte currentBeat)
     //{
     //    var original = UpdateMetronomeHook.Original(agentMetronome, currentBeat);

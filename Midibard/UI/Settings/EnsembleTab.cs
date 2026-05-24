@@ -117,6 +117,26 @@ public partial class PluginUI
 
         //-------------------
 
+        // アライアンス合奏カウントダウン設定
+        ImGui.Separator();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted("Alliance Countdown (sec)");
+        ImGuiUtil.HelpMarker(
+            "Countdown seconds for alliance ensemble start.\n" +
+            "When you press the bullhorn button or use /mbard aensemble,\n" +
+            "a /countdown N is sent and all alliance members start playing\n" +
+            "simultaneously when N seconds elapse.\n" +
+            "Set to 0 to disable the countdown (use fixed 3s delay instead).");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(ImGuiHelpers.ScaledVector2(120, 0).X);
+        int cdSec = MidiBard.config.AllianceCountdownSeconds;
+        if (ImGui.SliderInt("##allianceCountdown", ref cdSec, 0, 30))
+        {
+            MidiBard.config.AllianceCountdownSeconds = Math.Clamp(cdSec, 0, 30);
+        }
+
+        //-------------------
+
         ImGui.Checkbox(Language.ensemble_config_draw_ensemble_progress_indicator_on_visualizer, ref MidiBard.config.UseEnsembleIndicator);
 
         //-------------------
@@ -253,8 +273,7 @@ public partial class PluginUI
 
             try
             {
-                var partyMembers = api.PartyList
-                    .Select(partyMember => partyMember.GetPartyMemberData())
+                var partyMembers = global::MidiBard.Managers.EnsembleMembers.GetAll()
                     .Where(partyMember => MidiFileConfigManager.defaultPerformer.TrackMappingDict.ContainsKey(partyMember.Cid))
                     .ToList();
 
@@ -401,7 +420,7 @@ public partial class PluginUI
         {
             ImGui.Indent();
 
-            var partyMembers = api.PartyList.Select((partyMember) => partyMember.GetPartyMemberData()).ToList();
+            var partyMembers = global::MidiBard.Managers.EnsembleMembers.GetAll();
             ImGui.TextUnformatted(Language.display_order);
             ImGuiUtil.HelpMarker("""
             The order used to show bards in the ensemble panel (Drag to reorder)

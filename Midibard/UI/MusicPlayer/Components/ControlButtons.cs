@@ -16,6 +16,7 @@
 // This code is written by akira0245 and was originally used in the MidiBard project. Any usage of this code must prominently credit the author, akira0245, and indicate that it was originally used in the MidiBard project.
 
 using System;
+using System;
 using System.Numerics;
 
 using Dalamud.Bindings.ImGui;
@@ -24,6 +25,8 @@ using Dalamud.Interface;
 using MidiBard.Control.CharacterControl;
 using MidiBard.Control.MidiControl;
 using MidiBard.IPC;
+using MidiBard.Managers;
+using MidiBard.Util;
 
 using MidiBard2.Resources;
 
@@ -82,20 +85,56 @@ public partial class PluginUI
         }
     }
 
-    private void DrawButtonFastForward(bool disabled)
+    /// <summary>
+    /// 「曲を読み込んでアンサンブル準備」ボタン。
+    /// 左クリック: 選択中の曲を読み込み (再生しない) + アライアンス全員に楽器装着を指示。
+    /// </summary>
+    private void DrawButtonLoadAndPrepareEnsemble()
     {
-        ImGui.BeginDisabled(disabled);
-        ImGui.SameLine();
-        if (ImGuiUtil.IconButton(FontAwesomeIcon.FastForward, "##btnFastForward", "Fast forward"))
-        {
-            MidiPlayerControl.Next();
-        }
+        var tooltip = EnsembleMembers.IsAllianceOrCrossWorld()
+            ? "Load song & equip instruments for all alliance members\n(曲を読み込み、アライアンス全員が担当楽器を装着)"
+            : "Load song config\n(曲の設定を読み込む)";
 
-        if (ImGui.IsItemHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+        if (ImGuiUtil.IconButton(FontAwesomeIcon.FileImport, "##btnLoadEnsemble", tooltip))
         {
-            MidiPlayerControl.Prev();
+            // 非同期で曲を読み込み → 完了後に楽器装着指示を送信
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    // CurrentSongIndex が未設定(-1) の場合は先頭曲(0)を使う (Play()と同じ動作)
+                    int idx = PlaylistManager.CurrentSongIndex < 0 ? 0 : PlaylistManager.CurrentSongIndex;
+                    await PlaylistManager.LoadPlayback(idx, startPlaying: false, sync: true);
+
+                    // 他クライアントが曲をロードし終わるまで待つ (IPC往復 + LoadPlayback処理時間)
+                    await System.Threading.Tasks.Task.Delay(1200);
+
+                    api.Framework.RunOnFrameworkThread(() =>
+                    {
+                        // EnsembleControlWindow に設定を反映 (他クライアントにも配信)
+                        if (MidiBard.CurrentPlayback?.MidiFileConfig is { } config)
+                            IPCHandles.UpdateMidiFileConfig(config);
+                    });
+
+                    // UpdateMidiFileConfig が他クライアントに届いてから楽器装着指示
+                    await System.Threading.Tasks.Task.Delay(500);
+                    api.Framework.RunOnFrameworkThread(() =>
+                    {
+                        if (EnsembleMembers.IsAllianceOrCrossWorld())
+                            PartyChatCommand.SendAllianceUpdateInstrument();
+                        else if (MidiBard.config.playOnMultipleDevices)
+                            PartyChatCommand.SendUpdateInstrument();
+                        else
+                            IPCHandles.UpdateInstrument(true);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    api.PluginLog.Error(ex, "[LoadEnsemble] failed to load playback");
+                }
+            });
         }
-        ImGui.EndDisabled();
+        ImGui.SameLine();
     }
 
     private void DrawButtonPlayMode(bool disabled)

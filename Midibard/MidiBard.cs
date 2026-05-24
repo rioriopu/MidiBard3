@@ -138,6 +138,7 @@ public class MidiBard : IDalamudPlugin
         //            _ = Testhooks.Instance;
         //#endif
         api.ChatGui.ChatMessage += PartyChatCommand.OnChatMessage;
+        Managers.ServerClock.Init(); // アライアンス合奏の同期用 (FF14サーバー時刻ベース・NTP非依存)
 
         BardPlayDevice = new BardPlayDevice();
         InputDeviceManager.ScanMidiDeviceThread.Start();
@@ -246,6 +247,14 @@ public class MidiBard : IDalamudPlugin
                     break;
                 case "stop":
                     MidiPlayerControl.Stop();
+                    break;
+                case "allianceplay":
+                case "aensemble":
+                    // アライアンス合奏開始 (拡声器ボタンと同じ)。マクロ化用。
+                    PartyChatCommand.SendAllianceEnsembleStart();
+                    break;
+                case "alliancestop":
+                    PartyChatCommand.SendAllianceEnsembleStop();
                     break;
                 case "next":
                     MidiPlayerControl.Next();
@@ -468,6 +477,22 @@ public class MidiBard : IDalamudPlugin
         }
 
         api.ChatGui.ChatMessage -= PartyChatCommand.OnChatMessage;
+        Managers.ServerClock.Dispose();
+
+        // アンロード時に再生を停止・破棄する。DryWetMidi の高精度タイマー(ネイティブ)を放置すると、
+        // プラグイン更新/リロード時に旧 ALC のコールバックが GC され「callback on garbage collected
+        // delegate」で FailFast クラッシュする (再起動せず連続更新したときに発生)。
+        try
+        {
+            CurrentPlayback?.Stop();
+            CurrentPlayback?.Dispose();
+            CurrentPlayback = null;
+        }
+        catch (Exception e)
+        {
+            PluginLog.Error(e, "error disposing playback on unload");
+        }
+
         //Cbase.Dispose();
         FreeUnmanagedResources();
         GC.SuppressFinalize(this);

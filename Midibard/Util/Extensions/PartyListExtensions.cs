@@ -41,4 +41,122 @@ public static class PartyListExtensions
 
         return (cid, name, world);
     }
+
+    // ─── アライアンス対応拡張 (api13 fork より移植) ───────────────────────────────
+    // Dalamud の IPartyList はアライアンス中、最大20人(A=0-7/B=8-15/C=16-19)を ContentId 付きで列挙する。
+
+    /// <summary>アライアンス中か (Dalamud 標準プロパティ)。</summary>
+    public static bool IsInAlliance(this IPartyList partyList) => partyList?.IsAlliance == true;
+
+    /// <summary>パーティーまたはアライアンスに属しているか。</summary>
+    public static bool IsInAllianceOrParty(this IPartyList partyList) =>
+        partyList.IsInAlliance() || partyList.IsInParty();
+
+    /// <summary>
+    /// アンサンブル操作パネルを開く権限があるか。
+    /// 通常パーティ=リーダーのみ / アライアンス=Party A(先頭8人)所属なら可 /
+    /// クロスワールド等で Length=0 かつ IsAlliance=false の場合は制限を外して許可。
+    /// </summary>
+    public static bool IsAllianceOrPartyLeader(this IPartyList partyList)
+    {
+        if (partyList == null) return true;
+
+        // Dalamud がパーティを認識できないクロスワールド構成 → 操作許可。
+        if (partyList.Length == 0 && !partyList.IsAlliance)
+            return true;
+
+        var myCid = api.Player.ContentId;
+
+        // アライアンス: Party A (先頭8スロット) に自分がいれば制御権あり。
+        if (partyList.IsAlliance)
+        {
+            int slot = 0;
+            foreach (var m in partyList)
+            {
+                if (slot >= 8) break;
+                if (m != null) { if (m.ContentId == myCid) return true; slot++; }
+            }
+            return false;
+        }
+
+        // 通常パーティ (Length >= 2): リーダーのみ。
+        if (partyList.Length < 2) return false;
+
+        var leaderIdx = (int)partyList.PartyLeaderIndex;
+        try
+        {
+            if (leaderIdx >= 0 && leaderIdx < partyList.Length)
+            {
+                var ldr = partyList[leaderIdx];
+                if (ldr != null && ldr.ContentId == myCid) return true;
+            }
+        }
+        catch { }
+
+        // インデクサーが null を返す環境向けに foreach の rawPos でも照合。
+        try
+        {
+            int raw = 0;
+            foreach (var m in partyList)
+            {
+                if (raw == leaderIdx)
+                    return m != null && m.ContentId == myCid;
+                raw++;
+            }
+        }
+        catch { }
+
+        return false;
+    }
+
+    /// <summary>アライアンス・パーティーの全メンバー (最大20人)。</summary>
+    public static System.Collections.Generic.IEnumerable<IPartyMember> GetAllEnsembleMembers(this IPartyList partyList)
+    {
+        int count = 0;
+        foreach (var m in partyList)
+        {
+            if (count >= 20) yield break;
+            if (m != null) { yield return m; count++; }
+        }
+    }
+
+    /// <summary>Party A メンバー (0-7)。通常パーティ時は全員。</summary>
+    public static System.Collections.Generic.IEnumerable<IPartyMember> GetPartyAMembers(this IPartyList partyList)
+    {
+        int max = partyList.IsInAlliance() ? 8 : 20;
+        int count = 0;
+        foreach (var m in partyList)
+        {
+            if (count >= max) yield break;
+            if (m != null) { yield return m; count++; }
+        }
+    }
+
+    /// <summary>Party B メンバー (8-15)。</summary>
+    public static System.Collections.Generic.IEnumerable<IPartyMember> GetPartyBMembers(this IPartyList partyList)
+    {
+        int count = 0;
+        foreach (var m in partyList)
+        {
+            if (count >= 16) yield break;
+            if (m != null && count >= 8) yield return m;
+            if (m != null) count++;
+        }
+    }
+
+    /// <summary>Party C メンバー (16-19)。</summary>
+    public static System.Collections.Generic.IEnumerable<IPartyMember> GetPartyCMembers(this IPartyList partyList)
+    {
+        int count = 0;
+        foreach (var m in partyList)
+        {
+            if (count >= 20) yield break;
+            if (m != null && count >= 16) yield return m;
+            if (m != null) count++;
+        }
+    }
+
+    /// <summary>CID がアライアンス(またはパーティー)メンバーに含まれるか。</summary>
+    public static bool IsInAllianceOrPartyByCid(this IPartyList partyList, ulong cid) =>
+        partyList.GetAllEnsembleMembers().Any(p => p.ContentId == cid);
 }

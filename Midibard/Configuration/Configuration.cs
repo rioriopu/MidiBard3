@@ -71,6 +71,8 @@ public class Configuration : IPluginConfiguration
     public bool bmpTrackNames = true;
     public bool StopPlayingWhenEnsembleEnds = true;
     public bool SyncClients = true;
+    /// <summary>アライアンス合奏カウントダウン秒数 (0=即時、1〜30)</summary>
+    public int AllianceCountdownSeconds = 5;
     public bool AutoSetOffAFKSwitchingTime = true;
     public float EnsembleIndicatorDelay = -4;
     public bool UseEnsembleIndicator = false;

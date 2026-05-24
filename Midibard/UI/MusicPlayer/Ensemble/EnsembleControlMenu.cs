@@ -24,6 +24,7 @@ using Dalamud.Interface.Utility;
 using MidiBard.Control.MidiControl.PlaybackInstance;
 using MidiBard.IPC;
 using MidiBard.Managers;
+using MidiBard.Managers.Ipc;
 using MidiBard.Util;
 
 using MidiBard2.Resources;
@@ -40,7 +41,6 @@ public partial class PluginUI
         var isEnsembleButtonsDisabled = MidiBard.CurrentPlayback == null || ensembleRunning || MidiBard.IsPlaying;
 
         ImGuiUtil.PushIconButtonSize(new Vector2(ImGuiHelpers.GlobalScale * 40, ImGui.GetFrameHeight()));
-        // if (!MidiBard.config.playOnMultipleDevices || (MidiBard.config.playOnMultipleDevices && MidiBard.config.usingFileSharingServices))
 
         if (!ensembleRunning)
         {
@@ -76,6 +76,22 @@ public partial class PluginUI
                 {
                     PartyChatCommand.SendClose();
                 }
+            }
+        }
+
+        // ----- アライアンス合奏 (案X): /a で各自がローカル再生 (レディチェック不使用) -----
+        // FF14 のレディチェックはアライアンスでは弾かれるため、各自が担当トラックを同時再生する方式。
+        if (global::MidiBard.Managers.EnsembleMembers.IsAllianceOrCrossWorld())
+        {
+            ImGui.SameLine();
+            if (ImGuiUtil.IconButton(FontAwesomeIcon.Bullhorn, "##btnAllianceEnsembleStart",
+                    "アライアンス合奏開始: /a play を送信し、認識から約1.5秒後に各自一斉再生 (右クリックで /a stop)\n※「/a play」「/a stop」を手で打ってもOK。各自が同じ曲をロードし担当を割当済みであること"))
+            {
+                PartyChatCommand.SendAllianceEnsembleStart();
+            }
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+            {
+                PartyChatCommand.SendAllianceEnsembleStop();
             }
         }
 
@@ -118,8 +134,6 @@ public partial class PluginUI
         var muteButtonIcon = isOthersClientsMuted ? FontAwesomeIcon.VolumeMute : FontAwesomeIcon.VolumeUp;
         if (ImGuiUtil.IconButton(muteButtonIcon, muteButtonText, muteButtonText))
         {
-            // IsSndMaster => 0 = ON
-            // IsSndMaster => 1 = OFF
             IPCHandles.SetOption("IsSndMaster", isOthersClientsMuted ? 0 : 1, false);
             api.GameConfig.System.Set("IsSndMaster", 0);
             isOthersClientsMuted ^= true;
@@ -154,8 +168,6 @@ public partial class PluginUI
                 IPCHandles.ShowWindow(Winapi.nCmdShow.SW_RESTORE);
             }
 
-            //-------------------
-
             ImGui.SameLine();
             ImGui.Dummy(ImGuiHelpers.ScaledVector2(10));
 
@@ -164,34 +176,20 @@ public partial class PluginUI
             if (ImGuiUtil.IconButton(FontAwesomeIcon.FolderOpen, "##btnOpenConfigFolder", Language.ensemble_open_midi_config_directory))
             {
                 if (MidiBard.CurrentPlayback == null) return;
-
                 var fileInfo = MidiFileConfigManager.GetMidiConfigFileInfo(MidiBard.CurrentPlayback.FilePath);
-                var configDirectoryFullName = fileInfo.Directory.FullName;
-                // PluginLog.Debug(fileInfo.FullName);
-                // PluginLog.Debug(MidiBard.CurrentPlayback.FilePath);
-                // PluginLog.Debug(configDirectoryFullName);
-
-                Util.Extensions.OpenFolder(configDirectoryFullName);
+                Util.Extensions.OpenFolder(fileInfo.Directory.FullName);
             }
             ImGui.EndDisabled();
-
-            //-------------------
 
             ImGui.SameLine();
             ImGui.BeginDisabled(isEnsembleButtonsDisabled);
             if (ImGuiUtil.IconButton(FontAwesomeIcon.Edit, "##btnOpenConfigFile", Language.ensemble_open_midi_config_file))
             {
                 if (MidiBard.CurrentPlayback == null) return;
-
                 var fileInfo = MidiFileConfigManager.GetMidiConfigFileInfo(MidiBard.CurrentPlayback.FilePath);
-                // PluginLog.Debug(fileInfo.FullName);
-                // PluginLog.Debug(MidiBard.CurrentPlayback.FilePath);
-
                 Util.Extensions.OpenFile(fileInfo.FullName);
             }
             ImGui.EndDisabled();
-
-            //-------------------
 
             ImGui.SameLine();
             ImGui.BeginDisabled(isEnsembleButtonsDisabled);
@@ -206,8 +204,6 @@ public partial class PluginUI
                 }
             }
             ImGui.EndDisabled();
-
-            //-------------------
 
             ImGui.SameLine();
             ImGui.Dummy(ImGuiHelpers.ScaledVector2(10));

@@ -22,6 +22,8 @@ using System.Runtime.CompilerServices;
 
 using Dalamud.Interface.ImGuiNotification;
 
+using MidiBard.Managers.Ipc;
+
 using MidiBard2.Util;
 
 using Newtonsoft.Json;
@@ -174,14 +176,15 @@ namespace MidiBard.Managers
             var trackMapping = defaultPerformer?.TrackMappingDict ?? new();
             Cids = new ulong[100];
 
-            var partyMembers = api.PartyList.ToList();
+            // 同一ワールド＋クロスワールド全員を割当対象にする。
+            var memberCids = EnsembleMembers.GetAll();
 
-            foreach (var member in partyMembers)
+            foreach (var member in memberCids)
             {
-                if (member?.ContentId > 0 && trackMapping.TryGetValue(member.ContentId, out var trackIndices))
+                if (member.Cid > 0 && trackMapping.TryGetValue(member.Cid, out var trackIndices))
                 {
                     foreach (var trackIdx in trackIndices)
-                        Cids[trackIdx] = member.ContentId;
+                        Cids[trackIdx] = member.Cid;
                 }
             }
 
@@ -320,14 +323,14 @@ namespace MidiBard.Managers
                 }
             }
 
-            // scan for those in the party but not in config anymore, remove them from Default Performer
-            var partyList = api.PartyList.ToArray();
+            // scan for those in the party/alliance but not in config anymore, remove them from Default Performer
+            var currentCids = EnsembleMembers.GetAll();
             List<ulong> toRemove = new List<ulong>();
-            foreach (var cur in partyList)
+            foreach (var cur in currentCids)
             {
-                if (!existingCidInConfig.Contains(cur.ContentId))
+                if (!existingCidInConfig.Contains(cur.Cid))
                 {
-                    toRemove.Add(cur.ContentId);
+                    toRemove.Add(cur.Cid);
                 }
             }
 
@@ -387,7 +390,7 @@ namespace MidiBard.Managers
         {
             // main CIDs
             var mainCid = track.AssignedCids
-                .FirstOrDefault(cid => api.PartyList.Any(p => p.ContentId == cid));
+                .FirstOrDefault(cid => EnsembleMembers.Contains(cid));
 
             if (mainCid != 0)
             {
@@ -400,7 +403,7 @@ namespace MidiBard.Managers
                 .Where(cfg => track.AssignedCids.Contains(cfg.Cid))
                 .SelectMany(cfg => cfg.LinkedEnsembleMembers)
                 .Select(link => link.Cid)
-                .FirstOrDefault(cid => api.PartyList.Any(p => p.ContentId == cid));
+                .FirstOrDefault(cid => EnsembleMembers.Contains(cid));
 
             if (linkedCid != 0)
             {

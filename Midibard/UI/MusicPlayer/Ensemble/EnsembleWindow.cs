@@ -37,19 +37,13 @@ public partial class PluginUI
     private void DrawEnsembleWindow()
     {
         if (!ShowEnsembleWindow) return;
-        if (!api.PartyList.IsPartyLeader()) return;
+        if (!global::MidiBard.Managers.EnsembleMembers.CanConduct()) return;
 
-        // ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 2f);
-        // ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ImGui.GetStyle().ItemSpacing.X, ImGui.GetStyle().ItemSpacing.Y));
-        // ImGui.PushStyleColor(ImGuiCol.TitleBgActive, Style.Components.WindowBg);
-        // ImGui.PushStyleColor(ImGuiCol.TitleBg, Style.Components.WindowBg);
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, ImGui.GetStyle().FramePadding * 2.5f);
         ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(ImGui.GetStyle().CellPadding.Y));
 
         if (ImGui.Begin(Language.window_title_ensemble_panel + "###ensembleWindow", ref ShowEnsembleWindow))
         {
-            // fixed header
-            // float headerStartY = ImGui.GetCursorPosY();
             ImGui.BeginChild("##EnsembleControlMenuFixedHeight", ImGuiHelpers.ScaledVector2(-1, 40), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
             DrawEnsembleControlMenu();
             ImGui.EndChild();
@@ -66,14 +60,6 @@ public partial class PluginUI
             {
                 if (ImGui.Button(Language.ensemble_select_a_song_from_playlist, new Vector2(-1, ImGui.GetFrameHeight())))
                 {
-                    //try
-                    //{
-                    //    FilePlayback.LoadPlayback(new Random().Next(0, PlaylistManager.FilePathList.Count));
-                    //}
-                    //catch (Exception e)
-                    //{
-                    //    //
-                    //}
                 }
             }
             else
@@ -83,125 +69,133 @@ public partial class PluginUI
                     var changed = false;
                     var fileConfig = MidiBard.CurrentPlayback.MidiFileConfig;
 
-                    // use ensemble members config to define party selectbox order
-                    var partyList = api.PartyList.Select(partyMember => partyMember.GetPartyMemberData()).ToList();
+                    // トラック数ヘッダー
+                    int trackCount = fileConfig?.Tracks?.Count ?? 0;
+                    ImGui.TextUnformatted($"Tracks: {trackCount}");
+                    ImGui.Separator();
 
-                    var cidToIndexMap = MidiBard.config.EnsembleMemberConfigs
-                        .Select((config, index) => new { config.Cid, Index = index })
-                        .ToDictionary(item => item.Cid, item => item.Index);
-
-                    var orderedPartyList = partyList
-                        .OrderBy(partyMember => cidToIndexMap.ContainsKey(partyMember.Cid)
-                                                ? cidToIndexMap[partyMember.Cid]
-                                                : int.MaxValue)
-                        .ToList();
-
-                    orderedPartyList.Insert(0, (Cid: 0, Name: "", World: ""));
-
-                    var partyNamesList = orderedPartyList
-                        .Select(partyMember => partyMember.Cid != 0 ? $"{partyMember.Name}·{partyMember.World}" : "")
-                        .ToArray();
-
-                    if (ImGui.BeginTable("fileConfig.Tracks", 4, ImGuiTableFlags.SizingFixedFit))
+                    if (fileConfig == null || trackCount == 0)
                     {
-                        ImGui.TableSetupColumn("checkbox", ImGuiTableColumnFlags.WidthStretch, 1);
-                        ImGui.TableSetupColumn("instrument", ImGuiTableColumnFlags.WidthFixed);
-                        ImGui.TableSetupColumn("transpose", ImGuiTableColumnFlags.WidthFixed);
-                        ImGui.TableSetupColumn("playername", ImGuiTableColumnFlags.WidthStretch, 1.2f);
-
-                        var id = 125687;
-                        foreach (var dbTrack in fileConfig.Tracks)
+                        ImGui.TextUnformatted(fileConfig == null
+                            ? "Song config not loaded."
+                            : "No tracks found.");
+                        ImGui.SameLine();
+                        if (ImGui.SmallButton("Reload##reloadMidiConfig"))
                         {
-                            ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
-                            ImGui.PushID(id++);
-                            // ImGui.PushStyleColor(ImGuiCol.Text, dbTrack.Enabled ? Style.Components.Text : Style.Components.TextDisabled);
-                            ImGui.PushStyleColor(ImGuiCol.Text, dbTrack.Enabled ? ThemeManager.CurrentTheme.Text : ThemeManager.CurrentTheme.TextDisabled);
-                            //var colUprLeft = dbTrack.Enabled ? Style.Colors.Orange : Style.Colors.Violet;
-                            //var pMin = GetWindowPos() + GetCursorPos();
-                            //var pMax = GetWindowPos() + GetCursorPos() + new Vector2(GetWindowContentRegionWidth(), GetFrameHeight());
-                            //GetWindowDrawList().AddRectFilledMultiColor(pMin, pMax, colUprLeft, 0, 0, colUprLeft);
-                            ImGui.AlignTextToFramePadding();
-                            changed |= ImGui.Checkbox($"{dbTrack.Index + 1:00} {dbTrack.Name}", ref dbTrack.Enabled);
-
-                            ImGui.TableNextColumn(); //1
-                            changed |= InstrumentPicker($"##ensembleInstrumentPicker", ref dbTrack.Instrument);
-
-                            ImGui.TableNextColumn(); //2
-                            ImGui.SetNextItemWidth(ImGui.GetFrameHeight() * 3.3f);
-                            changed |= ImGuiUtil.InputIntWithReset($"##ensembleTransposeTrack", ref dbTrack.Transpose, 12, () => 0);
-
-                            ImGui.TableNextColumn(); //3
-                            ImGui.SetNextItemWidth(-1);
-
-                            var firstMidiFileCid = MidiFileConfig.GetFirstCidInParty(dbTrack);
-                            var selectedIdx = firstMidiFileCid == 0 ? 0 : orderedPartyList.FindIndex(i => i.Cid != 0 && i.Cid == firstMidiFileCid);
-
-                            if (ImGui.Combo("##partymemberSelect", ref selectedIdx, partyNamesList, partyNamesList.Length))
+                            // MidiFileConfig を再構築してアライアンス合奏設定を反映する
+                            var pb = MidiBard.CurrentPlayback;
+                            if (pb != null)
                             {
-                                if (selectedIdx >= 1)
-                                {
-                                    var currentCid = orderedPartyList[selectedIdx].Cid;
-                                    if (firstMidiFileCid > 0 && currentCid != firstMidiFileCid)
-                                    {
-                                        // character changed, delete the old one
-                                        dbTrack.AssignedCids.Remove(firstMidiFileCid);
-                                        changed = true;
-                                    }
+                                var newConfig = MidiFileConfigManager.GetMidiConfigFromFile(pb.FilePath)
+                                               ?? MidiFileConfigManager.GetMidiConfigFromTrack(pb.TrackInfos);
+                                pb.MidiFileConfig = newConfig;
+                            }
+                        }
+                    }
+                    else
+                    {
 
-                                    if (currentCid > 0)
+                        // 同一ワールド＋クロスワールドの全員を候補にする。
+                        var partyList = global::MidiBard.Managers.EnsembleMembers.GetAll();
+
+                        var cidToIndexMap = MidiBard.config.EnsembleMemberConfigs
+                            .Select((config, index) => new { config.Cid, Index = index })
+                            .ToDictionary(item => item.Cid, item => item.Index);
+
+                        var orderedPartyList = partyList
+                            .OrderBy(partyMember => cidToIndexMap.ContainsKey(partyMember.Cid)
+                                                    ? cidToIndexMap[partyMember.Cid]
+                                                    : int.MaxValue)
+                            .ToList();
+
+                        orderedPartyList.Insert(0, (Cid: 0, Name: "", World: ""));
+
+                        var partyNamesList = orderedPartyList
+                            .Select(partyMember => partyMember.Cid != 0 ? $"{partyMember.Name}·{partyMember.World}" : "")
+                            .ToArray();
+
+                        if (ImGui.BeginTable("fileConfig.Tracks", 4, ImGuiTableFlags.SizingFixedFit))
+                        {
+                            ImGui.TableSetupColumn("checkbox", ImGuiTableColumnFlags.WidthStretch, 1);
+                            ImGui.TableSetupColumn("instrument", ImGuiTableColumnFlags.WidthFixed);
+                            ImGui.TableSetupColumn("transpose", ImGuiTableColumnFlags.WidthFixed);
+                            ImGui.TableSetupColumn("playername", ImGuiTableColumnFlags.WidthStretch, 1.2f);
+
+                            var id = 125687;
+                            foreach (var dbTrack in fileConfig.Tracks)
+                            {
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                ImGui.PushID(id++);
+                                ImGui.PushStyleColor(ImGuiCol.Text, dbTrack.Enabled ? ThemeManager.CurrentTheme.Text : ThemeManager.CurrentTheme.TextDisabled);
+                                ImGui.AlignTextToFramePadding();
+                                changed |= ImGui.Checkbox($"{dbTrack.Index + 1:00} {dbTrack.Name}", ref dbTrack.Enabled);
+
+                                ImGui.TableNextColumn(); //1
+                                changed |= InstrumentPicker($"##ensembleInstrumentPicker", ref dbTrack.Instrument);
+
+                                ImGui.TableNextColumn(); //2
+                                ImGui.SetNextItemWidth(ImGui.GetFrameHeight() * 3.3f);
+                                changed |= ImGuiUtil.InputIntWithReset($"##ensembleTransposeTrack", ref dbTrack.Transpose, 12, () => 0);
+
+                                ImGui.TableNextColumn(); //3
+                                ImGui.SetNextItemWidth(-1);
+
+                                var firstMidiFileCid = MidiFileConfig.GetFirstCidInParty(dbTrack);
+                                var selectedIdx = firstMidiFileCid == 0 ? 0 : orderedPartyList.FindIndex(i => i.Cid != 0 && i.Cid == firstMidiFileCid);
+
+                                if (ImGui.Combo("##partymemberSelect", ref selectedIdx, partyNamesList, partyNamesList.Length))
+                                {
+                                    if (selectedIdx >= 1)
                                     {
-                                        // add character
-                                        if (!dbTrack.AssignedCids.Contains(currentCid))
+                                        var currentCid = orderedPartyList[selectedIdx].Cid;
+                                        if (firstMidiFileCid > 0 && currentCid != firstMidiFileCid)
                                         {
-                                            dbTrack.AssignedCids.Insert(0, currentCid);
+                                            dbTrack.AssignedCids.Remove(firstMidiFileCid);
                                             changed = true;
                                         }
-                                    }
-                                }
-                                else
-                                {
-                                    // choose empty, remove all the characters in the same party
-                                    foreach (var member in api.PartyList)
-                                    {
-                                        if (dbTrack.AssignedCids.Contains(member.ContentId))
+
+                                        if (currentCid > 0)
                                         {
-                                            dbTrack.AssignedCids.Remove(member.ContentId);
+                                            if (!dbTrack.AssignedCids.Contains(currentCid))
+                                            {
+                                                dbTrack.AssignedCids.Insert(0, currentCid);
+                                                changed = true;
+                                            }
                                         }
                                     }
-
-                                    changed = true;
-                                }
-                            }
-
-                            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-                            {
-                                // choose empty, remove all the characters in the same party
-                                foreach (var member in api.PartyList)
-                                {
-                                    if (dbTrack.AssignedCids.Contains(member.ContentId))
+                                    else
                                     {
-                                        dbTrack.AssignedCids.Remove(member.ContentId);
+                                        // choose empty: 担当割当を全員ぶん解除 (同一ワールド＋クロスワールド)
+                                        dbTrack.AssignedCids.RemoveAll(c => global::MidiBard.Managers.EnsembleMembers.Contains(c));
+                                        changed = true;
                                     }
                                 }
-                                changed = true;
+
+                                if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+                                {
+                                    // choose empty: 担当割当を全員ぶん解除 (同一ワールド＋クロスワールド)
+                                    dbTrack.AssignedCids.RemoveAll(c => global::MidiBard.Managers.EnsembleMembers.Contains(c));
+                                    changed = true;
+                                }
+
+                                ImGuiUtil.ToolTip(Language.ensemble_combo_tooltip_assign_track_character);
+
+                                ImGui.PopStyleColor();
+
+                                ImGui.PopID();
                             }
 
-                            ImGuiUtil.ToolTip(Language.ensemble_combo_tooltip_assign_track_character);
-
-                            ImGui.PopStyleColor();
-
-                            ImGui.PopID();
+                            ImGui.EndTable();
                         }
 
-                        ImGui.EndTable();
-                    }
+                        if (changed)
+                        {
+                            fileConfig.Save(MidiBard.CurrentPlayback.FilePath);
+                            IPCHandles.UpdateMidiFileConfig(fileConfig);
+                        }
 
-                    if (changed)
-                    {
-                        fileConfig.Save(MidiBard.CurrentPlayback.FilePath);
-                        IPCHandles.UpdateMidiFileConfig(fileConfig);
-                    }
+                    } // end else (trackCount > 0)
                 }
                 catch (Exception e)
                 {
@@ -231,9 +225,8 @@ public partial class PluginUI
             ImGui.EndChild();
         }
 
-        ImGui.End(); // ##EnsembleScrollableContent
+        ImGui.End();
 
-        // ImGui.PopStyleColor(2);
         ImGui.PopStyleVar(2);
     }
 }
